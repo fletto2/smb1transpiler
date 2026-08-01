@@ -1,0 +1,67 @@
+name: build
+
+# CI can prove the code builds and that it fails cleanly with no input.  It
+# cannot prove the disk is byte-exact: that needs the two ROMs, and this
+# repository ships no Nintendo data, so the CRC32 self-check only ever runs on
+# a machine where the user supplied their own dumps.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build (clang)
+        run: |
+          cc -std=c99 -pedantic -Wall -Wextra -Werror -O2 \
+              -o smb1transpiler smb1transpiler.c sprites.c disk.c
+      - name: Smoke test (no ROMs present)
+        run: |
+          mkdir empty && cd empty
+          ! ../smb1transpiler
+          ../smb1transpiler 2>&1 | grep -q "no Super Mario Bros"
+
+  windows-mingw:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build (MinGW gcc)
+        shell: bash
+        run: |
+          gcc -std=c99 -pedantic -Wall -Wextra -Werror -O2 \
+              -o smb1transpiler.exe smb1transpiler.c sprites.c disk.c
+      - name: Smoke test (no ROMs present)
+        shell: bash
+        run: |
+          mkdir empty && cd empty
+          ! ../smb1transpiler.exe
+          ../smb1transpiler.exe 2>&1 | grep -q "no Super Mario Bros"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: smb1transpiler-windows-mingw
+          path: smb1transpiler.exe
+
+  windows-msvc:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      # vswhere sits at a fixed path on every Windows image, so the MSVC
+      # environment can be located without a third-party action.
+      - name: Build (MSVC cl)
+        shell: cmd
+        run: |
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set VSPATH=%%i
+          call "%VSPATH%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /O2 /W3 /WX /D_CRT_SECURE_NO_WARNINGS ^
+             /Fe:smb1transpiler.exe smb1transpiler.c sprites.c disk.c
+      - name: Smoke test (no ROMs present)
+        shell: cmd
+        run: |
+          mkdir empty && cd empty
+          ..\smb1transpiler.exe && exit /b 1
+          ..\smb1transpiler.exe 2>&1 | findstr /c:"no Super Mario Bros" >nul || exit /b 1
+          exit /b 0
