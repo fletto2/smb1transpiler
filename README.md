@@ -182,6 +182,7 @@ it. He also tested the port on hardware.
 [Adrian's Digital Basement](https://www.youtube.com/@adriansdigitalbasement)
 
 **Joe Burks** developed the A2VERA card the port renders on, and tested the port on hardware.
+[A2VERA card](https://lectronz.com/products/a2vera-apple-ii-vera-video-card-with-fm-audio) ·
 [github.com/jburks](https://github.com/jburks) ·
 [Wavicle on Tindie](https://www.tindie.com/stores/wavicle/)
 
