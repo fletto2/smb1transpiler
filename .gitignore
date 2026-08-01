@@ -1,0 +1,12 @@
+smb1transpiler
+out/
+*.o
+
+# never commit ROMs -- this repo ships no Nintendo data.
+# .bin is here because the SNES TOSEC set uses it, and a stray 2 MB dump in
+# this folder is exactly the accident that would break the rule.
+*.nes
+*.sfc
+*.smc
+*.bin
+*.dsk
