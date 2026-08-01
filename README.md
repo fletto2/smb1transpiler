@@ -1,7 +1,9 @@
 # smb1transpiler
 
-Rebuild the a2vera Apple II + VERA port of *Super Mario Bros 1* from your own ROMs, using
-only a C compiler. No assembler, no Python, no emulator.
+Rebuild the a2vera Apple II +
+[VERA](https://lectronz.com/products/a2vera-apple-ii-vera-video-card-with-fm-audio) port of
+*Super Mario Bros 1* from your own ROMs, using only a C compiler. No assembler, no Python,
+no emulator.
 
 The port draws SMB1 with *Super Mario All-Stars* artwork. Neither ROM may be redistributed,
 so this repository ships no Nintendo data at all, down to individual tiles and palette
