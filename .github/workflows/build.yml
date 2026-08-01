@@ -22,8 +22,10 @@ jobs:
       - name: Smoke test (no ROMs present)
         run: |
           mkdir empty && cd empty
-          ! ../smb1transpiler
-          ../smb1transpiler 2>&1 | grep -q "no Super Mario Bros"
+          if ../smb1transpiler > log.txt 2>&1; then
+            echo "expected a nonzero exit with no ROMs present"; exit 1
+          fi
+          grep -q "no Super Mario Bros" log.txt
 
   windows-mingw:
     runs-on: windows-latest
@@ -38,8 +40,10 @@ jobs:
         shell: bash
         run: |
           mkdir empty && cd empty
-          ! ../smb1transpiler.exe
-          ../smb1transpiler.exe 2>&1 | grep -q "no Super Mario Bros"
+          if ../smb1transpiler.exe > log.txt 2>&1; then
+            echo "expected a nonzero exit with no ROMs present"; exit 1
+          fi
+          grep -q "no Super Mario Bros" log.txt
       - uses: actions/upload-artifact@v4
         with:
           name: smb1transpiler-windows-mingw
