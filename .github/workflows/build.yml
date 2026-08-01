@@ -7,6 +7,7 @@ name: build
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -26,6 +27,10 @@ jobs:
             echo "expected a nonzero exit with no ROMs present"; exit 1
           fi
           grep -q "no Super Mario Bros" log.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: smb1transpiler-macos
+          path: smb1transpiler
 
   windows-mingw:
     runs-on: windows-latest
@@ -34,7 +39,7 @@ jobs:
       - name: Build (MinGW gcc)
         shell: bash
         run: |
-          gcc -std=c99 -pedantic -Wall -Wextra -Werror -O2 \
+          gcc -std=c99 -pedantic -Wall -Wextra -Werror -O2 -static \
               -o smb1transpiler.exe smb1transpiler.c sprites.c disk.c
       - name: Smoke test (no ROMs present)
         shell: bash
@@ -60,7 +65,7 @@ jobs:
         run: |
           for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set VSPATH=%%i
           call "%VSPATH%\VC\Auxiliary\Build\vcvars64.bat"
-          cl /nologo /O2 /W3 /WX /D_CRT_SECURE_NO_WARNINGS ^
+          cl /nologo /O2 /MT /W3 /WX /D_CRT_SECURE_NO_WARNINGS ^
              /Fe:smb1transpiler.exe smb1transpiler.c sprites.c disk.c
       - name: Smoke test (no ROMs present)
         shell: cmd
@@ -69,3 +74,41 @@ jobs:
           ..\smb1transpiler.exe && exit /b 1
           ..\smb1transpiler.exe 2>&1 | findstr /c:"no Super Mario Bros" >nul || exit /b 1
           exit /b 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: smb1transpiler-windows-msvc
+          path: smb1transpiler.exe
+
+  # Workflow artifacts expire after 90 days and need a GitHub login to
+  # download, which is no good for the people most likely to want a prebuilt
+  # binary.  A release is public and permanent, so tagging cuts one.
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [macos, windows-mingw, windows-msvc]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Stage the binaries
+        run: |
+          mkdir out
+          cp dist/smb1transpiler-windows-mingw/smb1transpiler.exe \
+             out/smb1transpiler-windows-x64.exe
+          cp dist/smb1transpiler-macos/smb1transpiler \
+             out/smb1transpiler-macos
+          ls -l out
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: out/*
+          body: |
+            Standalone builds. No installer, no runtime to fetch: the Windows
+            .exe links the CRT statically and needs only kernel32 and msvcrt.
+
+            Put the binary in a folder with your own Super Mario Bros `.nes`
+            and Super Mario All-Stars `.sfc` and run it there. It writes
+            `out/smb1_vera.dsk` and verifies its own CRC32 (`8875B7F8`).
+
+            This release contains no Nintendo data. You supply the ROMs.
