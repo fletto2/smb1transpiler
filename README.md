@@ -25,8 +25,7 @@ wrote out/smb1_vera.dsk (143360 bytes)
 ```
 
 With no arguments the tool writes a 143,360-byte `.dsk` that is md5-identical to the shipped
-`smb1_vera.dsk` (`94b439ba`). It checks that itself and exits nonzero on a mismatch, because
-a disk that is nearly right still boots into garbage.
+`smb1_vera.dsk` (`94b439ba`), checks that itself, and exits nonzero on a mismatch.
 
 Other flags: `--verify tiles_vera.bin` for a per-block tileset report, `--vram vram.dat` to
 overwrite a reference stream instead of building one, `--out DIR`, and `--force` to build
@@ -42,9 +41,8 @@ like:
 | `*.nes` | Super Mario Bros. | iNES magic, 2×16 KB PRG + 1×8 KB CHR, then a CRC32 of the PRG and CHR |
 | `*.sfc` `*.smc` `*.bin` (the SNES TOSEC set uses `.bin`) | Super Mario All-Stars (USA) | 2 MB LoROM; the SNES header's checksum/complement pair at `$00:FFDC`; then a CRC32 of the three graphics banks. A 512-byte copier header is detected by size remainder and skipped. |
 
-Container validation is structural on purpose: no title string is compared, so nothing
-identifying has to be embedded. The CRCs cover the data, and a CRC is a fingerprint. It
-cannot reconstruct a byte of anything.
+No title string is compared, so nothing identifying has to be embedded. The CRCs cover the
+data, and a CRC is a fingerprint: it cannot reconstruct a byte of anything.
 
 ## What it derives
 
@@ -68,8 +66,7 @@ All four read your ROMs:
 | 3 | SMAS offset masked by a NES tile's silhouette | 2, the castle battlement crenellation |
 
 Those rules were solved rather than written by hand: given a target tile and a candidate
-source, the index map is fully determined, so the tool that emitted the header searched for a
-consistent one and hard-errored if any tile had no derivation at all.
+source, the index map is fully determined.
 
 ### The 32 KB game image
 
@@ -79,8 +76,7 @@ offsets and the bytes come from the ROM:
 1. the port's own source-level edits to `prg.asm` (5 bytes, the §9 vine-snap table planted in
    SMB1's unused space), applied at the original base so that stage 2 rebases them;
 2. the three mechanical rules: 1465 offsets take `−$78` (the relocation to `$0800`), 36 take
-   `$20 → $FE` and 51 take `$40 → $FF` (the PPU/APU register shadows). Measured by diffing an
-   original-base assembly against the port's, leaving no unexplained bytes;
+   `$20 → $FE` and 51 take `$40 → $FF` (the PPU/APU register shadows);
 3. the port's own hooks (109 bytes of `JMP`s into its routines plus `$EA` pad), spliced last.
    19 of them deliberately overwrite a byte stage 2 rewrote.
 
@@ -98,14 +94,12 @@ instead of streaming audio off the wrong track.
 
 ### The APU divide LUT
 
-`floor(300240/(p+1))` for p = 0..2047. It verifies its own pulse/triangle identity rather
-than trusting it.
+`floor(300240/(p+1))` for p = 0..2047. One table serves the pulse and the triangle.
 
 ### The VERA stream
 
-All 7 chunks, built from scratch. (`--vram <file>` still exists: it loads a reference stream
-and substitutes the derived chunks into it, which is how each one was checked as it landed.
-Either way, a derived chunk off by one byte moves the disk's md5.)
+All 7 chunks, built from scratch. (`--vram <file>` loads a reference stream and substitutes
+the derived chunks into it.)
 
 | chunk | size | source |
 |---|---|---|
@@ -117,9 +111,8 @@ Either way, a derived chunk off by one byte moves the disk's md5.)
 | HUD font `$1A000` | 8 KB | NES CHR pattern table 1, promoted to 4bpp |
 | palette `$1FA00` | 512 B | SMAS BG palette pool + Mario's table + the port's overrides (below) |
 
-The three SMAS graphics banks are plain ROM slices, verified byte-for-byte (`b0A $50000`,
-`b07 $38000`, `b06 $30000`), so nothing there needs a search and the offsets serve as the
-metadata. b0A is 256/256 verbatim; b07 is 209/256 verbatim plus 47 injected slots, which
+The three SMAS graphics banks are plain ROM slices (`b0A $50000`, `b07 $38000`,
+`b06 $30000`), so nothing there needs a search and the offsets serve as the metadata. b0A is 256/256 verbatim; b07 is 209/256 verbatim plus 47 injected slots, which
 `sprites.c` assembles the way the asset pipeline does. NES-CHR tiles come through a
 palette-index remap (the lift, the castle raise-flag, the flame, the bubble, the brick chunk,
 the cloud puff, the explosions), b06 BG art is borrowed for objects SMAS has no OBJ tile for
@@ -137,8 +130,7 @@ corrupts it silently.
 
 The chunk that looked least derivable, since a palette carries no structure to search for.
 14 of the 16 blocks turn out to be exact selectors into SMAS's own BG palette pool (`DATA_04AEC3`, indexed through
-`DATA_04AE3F`, both verified to sit at their LoROM offsets), and one is Mario's `DATA_0499FD`
-verbatim. On top sit 14 single-entry overrides and one fully authored block (offset 8, the
+`DATA_04AE3F`), and one is Mario's `DATA_0499FD` verbatim. On top sit 14 single-entry overrides and one fully authored block (offset 8, the
 cloud/hill/fence palette). Those are the port's own: the sky backdrop, the ?-block/coin gold
 ramp seeded to crtab step 0, §28's coral copies, and the forced-black off4 idx8 that
 `setup_black_tile` depends on.
@@ -155,12 +147,10 @@ Filling only the first `$1000` leaves the disk wrong by exactly 2048 bytes.
 
 ## Gotchas
 
-**NES background tiles are pattern table 1** (CHR index `$1xx`). Reading table 0 for a
-background tile is a bug this project shipped once, which put a sprite tile on screen as the
-tree-ledge stem.
+**NES background tiles are pattern table 1** (CHR index `$1xx`). Read table 0 and you get a
+sprite tile instead.
 
-**High nibble is the LEFT pixel** in VERA 4bpp. At least one script in the main repo has this
-backwards and renders every tile mirrored.
+**High nibble is the LEFT pixel** in VERA 4bpp. Backwards, and every tile renders mirrored.
 
 **The embedded 6502 blobs in `a2vera_blobs.h` are post-patch.** `mkboot` resolves labels and
 rewrites operands into the resident/payload/LC images at build time, so raw assembler output
@@ -185,9 +175,8 @@ it. He also tested the port on hardware.
 **Michael Morrison** contributed code and tested the port on hardware.
 [github.com/code-bythepound](https://github.com/code-bythepound)
 
-Several defects in this port only ever appeared on metal: the RWTS seek-phase and
-nibble-decode bugs, and the VERA-card address corruption that traced back to the Apple II
-slot having no VDA/VPA pins. Emulation showed none of them.
+Several defects in this port only ever appeared on metal, and emulation showed none of
+them.
 
 ## License
 
