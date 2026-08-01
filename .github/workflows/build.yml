@@ -100,15 +100,21 @@ jobs:
           cp dist/smb1transpiler-macos/smb1transpiler \
              out/smb1transpiler-macos
           ls -l out
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: out/*
-          body: |
-            Standalone builds. No installer, no runtime to fetch: the Windows
-            .exe links the CRT statically and needs only kernel32 and msvcrt.
+      # gh is preinstalled on the runner and GITHUB_TOKEN is enough, so the
+      # release needs no third-party action.
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" out/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --notes 'Standalone builds. No installer, no runtime to fetch: the
+          Windows .exe links the CRT statically and needs only kernel32 and
+          msvcrt.
 
-            Put the binary in a folder with your own Super Mario Bros `.nes`
-            and Super Mario All-Stars `.sfc` and run it there. It writes
-            `out/smb1_vera.dsk` and verifies its own CRC32 (`8875B7F8`).
+          Put the binary in a folder with your own Super Mario Bros `.nes` and
+          Super Mario All-Stars `.sfc` and run it there. It writes
+          `out/smb1_vera.dsk` and verifies its own CRC32 (`8875B7F8`).
 
-            This release contains no Nintendo data. You supply the ROMs.
+          This release contains no Nintendo data. You supply the ROMs.'
