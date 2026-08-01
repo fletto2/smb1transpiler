@@ -16,6 +16,19 @@ make                                    # or: cc -O2 -o smb1transpiler *.c
 ./smb1transpiler                        # writes out/smb1_vera.dsk
 ```
 
+Portable C99 with no libraries beyond the standard one. Linux, macOS and BSD build with the
+line above. **Windows** builds the same sources with MinGW or MSVC:
+
+```
+gcc -O2 -o smb1transpiler.exe smb1transpiler.c sprites.c disk.c    REM MinGW
+cl /O2 /Fe:smb1transpiler.exe smb1transpiler.c sprites.c disk.c    REM MSVC
+```
+
+Listing a directory is the one thing C does not standardise, so `dirscan_*()` wraps `dirent`
+and `FindFirstFile`; everything else is the same code on every platform. Verified by
+building with MinGW-w64 for both x86_64 and i686 and running each `.exe`: both write the
+byte-exact disk.
+
 ```
 NES  SMB1 : smb1.nes  (40976 bytes, CHR at 0x8010)
 SNES SMAS : smas.sfc  (2097152 bytes)

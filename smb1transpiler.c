@@ -13,13 +13,90 @@
  *
  * Dumps are found by extension, not by filename: .nes, and .sfc/.smc/.bin.
  */
-#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
 #include "smb1transpiler.h"
 #include "a2vera_blobs.h"
+
+/*
+ * Listing a directory and making one are the only two things here that are
+ * not plain C.  POSIX has dirent.h and mkdir(2); Win32 has FindFirstFile and
+ * _mkdir, and MSVC ships no dirent.h at all.  Both hide behind dirscan_*()
+ * and MKDIR() so find_roms() below stays readable.  Everything else in this
+ * program is portable C99, and the ROMs are opened "rb" so a Windows text
+ * mode translation cannot corrupt them.
+ */
+#ifdef _WIN32
+# include <windows.h>
+# include <direct.h>
+# define MKDIR(p) _mkdir (p)
+
+struct dirscan
+{
+  HANDLE h;
+  WIN32_FIND_DATAA fd;
+  char name[MAX_PATH];
+  int pending;
+};
+
+static int
+dirscan_open (struct dirscan *s)
+{
+  s->h = FindFirstFileA ("*", &s->fd);
+  s->pending = s->h != INVALID_HANDLE_VALUE;
+  return s->pending ? 0 : -1;
+}
+
+static const char *
+dirscan_next (struct dirscan *s)
+{
+  if (!s->pending)
+    return NULL;
+  /* FindFirstFile already returned the first name, so hand that one back
+   * before advancing; otherwise the first file in the folder is skipped */
+  strcpy (s->name, s->fd.cFileName);
+  s->pending = FindNextFileA (s->h, &s->fd) != 0;
+  return s->name;
+}
+
+static void
+dirscan_close (struct dirscan *s)
+{
+  if (s->h != INVALID_HANDLE_VALUE)
+    FindClose (s->h);
+}
+#else
+# include <dirent.h>
+# include <sys/stat.h>
+# define MKDIR(p) mkdir (p, 0777)
+
+struct dirscan
+{
+  DIR *d;
+};
+
+static int
+dirscan_open (struct dirscan *s)
+{
+  s->d = opendir (".");
+  return s->d ? 0 : -1;
+}
+
+static const char *
+dirscan_next (struct dirscan *s)
+{
+  struct dirent *e = readdir (s->d);
+
+  return e ? e->d_name : NULL;
+}
+
+static void
+dirscan_close (struct dirscan *s)
+{
+  closedir (s->d);
+}
+#endif
 
 /* the VERA stream: u16 nchunks, then per chunk u24 addr, u16 len, data[].
  * Order and geometry are a contract with the 6502 load_vram. */
@@ -218,26 +295,26 @@ check_dumps (const struct rom *nes, const struct rom *smas, long chr_off)
 static int
 find_roms (struct rom *nes, struct rom *smas, long *chr_off)
 {
-  struct dirent *e;
+  struct dirscan scan;
+  const char *name;
   struct rom r;
   int nes_ext, snes_ext;
-  DIR *d = opendir (".");
 
-  if (!d)
+  if (dirscan_open (&scan))
     {
-      perror ("opendir");
+      fprintf (stderr, "ERROR: cannot list the current directory\n");
       return -1;
     }
-  while ((e = readdir (d)))
+  while ((name = dirscan_next (&scan)))
     {
-      nes_ext = ends_with (e->d_name, ".nes");
+      nes_ext = ends_with (name, ".nes");
       /* .bin is what the SNES TOSEC set uses; safe to scan now that
        * the CRC gates acceptance -- a wrong .bin is rejected */
-      snes_ext = ends_with (e->d_name, ".sfc")
-        || ends_with (e->d_name, ".smc") || ends_with (e->d_name, ".bin");
+      snes_ext = ends_with (name, ".sfc")
+        || ends_with (name, ".smc") || ends_with (name, ".bin");
       if (!nes_ext && !snes_ext)
         continue;
-      if (!slurp (e->d_name, &r))
+      if (!slurp (name, &r))
         continue;
       if (nes_ext && !nes->data && is_smb1 (&r, chr_off))
         *nes = r;
@@ -246,7 +323,7 @@ find_roms (struct rom *nes, struct rom *smas, long *chr_off)
       else
         free (r.data);
     }
-  closedir (d);
+  dirscan_close (&scan);
 
   if (!nes->data)
     fprintf (stderr, "ERROR: no Super Mario Bros .nes here "
@@ -740,7 +817,7 @@ main (int argc, char **argv)
       goto err_free_tiles;
     }
 
-  mkdir (outdir, 0777);
+  MKDIR (outdir);
   write_file (outdir, "tiles_vera.bin", tiles,
               (long) NTILES * VERA_TILE_BYTES);
   /* later stages want the CHR verbatim; extract it rather than making
