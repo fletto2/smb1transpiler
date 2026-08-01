@@ -46,45 +46,6 @@ Container validation is structural on purpose: no title string is compared, so n
 identifying has to be embedded. The CRCs cover the data, and a CRC is a fingerprint. It
 cannot reconstruct a byte of anything.
 
-### Which dumps work
-
-Structural validation alone turned out to be nowhere near enough. Running every Super Mario
-Bros. dump in the NES TOSEC set (108 of them) through the tool *before* the CRC gate existed:
-
-| outcome | count |
-|---|---|
-| byte-exact shipped disk | 5 |
-| failed loudly (a relocation rule hit a byte it did not expect) | 14 |
-| rejected at the door (not 2 PRG + 1 CHR) | 5 |
-| accepted, and silently produced a different, wrong disk | **84** |
-
-Hacks, translations and bad dumps all satisfy "iNES magic + 2 PRG + 1 CHR", and what comes
-out the far end is a disk that boots and then misbehaves, which no exit code reports. With
-the CRC gate the same 108 dumps give 5 exact, 98 rejected by fingerprint, 5 rejected
-structurally, and no silent wrong disks.
-
-The 5 that work share one `(PRG, CHR)` CRC32 pair, differing only in iNES header padding and
-trailing junk. No other dump in the set shares it:
-
-```
-PRG CRC32 5CF548D3   CHR CRC32 867B51AD
-  811b027eaf99c2def7b933c5208636de  Super Mario Bros. (1985-09-13)(Nintendo)(JP-US)
-  8d5b58ccffe1ebefcd3c4a28fdae3aab  Super Mario Bros. (1985)(Nintendo)(PlayChoice-10)
-  a71fc3709ae3c0a49c3a00b44d7de85f  ...(JP-US)[h Morgan][enlarged rom]
-  3c89d9e821a2b2000aae1b8ddc864ac3  ...(JP-US)[h Vimm][iNES title]
-  93b3db665cb10efe8fa8b0a076d17920  ...(JP-US)[h][iNES title]
-```
-
-The PAL/EU dumps fail loudly on relocation rule 3, because the port's tables are measured
-against the NTSC code.
-
-On the SNES side the checksum/complement test also false-positives: *Metal Warriors (US)* is
-a 2 MB LoROM that passes it, and the bank CRCs reject it on 3 of 5 blocks. Verified working
-are the plain 2 MB image as `.sfc` or `.bin`, and the same image carrying a 512-byte copier
-header as `.smc`. Both build the byte-exact disk.
-
-`--force` bypasses the fingerprint loudly, for anyone deliberately feeding a ROM hack.
-
 ## What it derives
 
 Everything below is driven by `a2vera_blobs.h`, the one generated file in this repository.
