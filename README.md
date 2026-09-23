@@ -3,7 +3,8 @@
 Rebuild the
 [a2vera](https://lectronz.com/products/a2vera-apple-ii-vera-video-card-with-fm-audio)
 Apple II + VERA port of *Super Mario Bros 1* from your own ROMs, using only a C compiler.
-No assembler, no Python, no emulator.
+No assembler, no Python, no emulator. It writes three disks: the 140K Apple II 5.25", the
+800K ProDOS version of it, and the 1541 image for the C64 + VERA port of the same game.
 
 The port draws SMB1 with *Super Mario All-Stars* artwork. Neither ROM may be redistributed,
 so this repository ships no Nintendo data at all, down to individual tiles and palette
@@ -36,13 +37,13 @@ NES  SMB1 : smb1.nes  (40976 bytes, CHR at 0x8010)
 SNES SMAS : smas.sfc  (2097152 bytes)
 ...
 wrote out/smb1_vera.dsk (143360 bytes)
-  ProDOS: boot block 0 | resident blocks 512-523 | tracks 2-34 mapped from block 16
-wrote out/smb1_vera.po (819200 bytes)
-  CRC32 A15C62CB -- matches the shipped 800K image
-  C64: 10 files on a 1541 image
-wrote out/smb1_vera.d64 (174848 bytes)
-  CRC32 35E23C9F -- matches the expected 1541 image
   CRC32 8875B7F8 -- matches the shipped disk
+wrote out/smb1_vera.po (819200 bytes)
+  boot block 0 | resident blocks 512-523 | tracks 2-34 mapped from block 16
+  CRC32 A15C62CB -- matches the shipped 800K image
+wrote out/smb1_vera.d64 (174848 bytes)
+  10 files on a 1541 image
+  CRC32 35E23C9F -- matches the expected 1541 image
 ```
 
 With no arguments the tool writes three images and checks all of them itself, exiting nonzero
@@ -227,6 +228,11 @@ it. He also tested the port on hardware.
 **Michael Morrison** contributed code and tested the port on hardware.
 [github.com/code-bythepound](https://github.com/code-bythepound)
 
+**Krill** wrote the drive loader the C64 image boots through: Loader v166 (Plush, 2018),
+used unmodified under the 3-clause BSD license. It is the reason a 1541 pulls ~97 KB off the
+disk in well under a minute.
+[krill.e2m.io](https://krill.e2m.io/)
+
 Several defects in this port only ever appeared on metal, and emulation showed none of
 them.
 
@@ -256,9 +262,11 @@ What the license does not cover:
 - **The ROMs.** Nothing here licenses them, and this repository deliberately ships none of
   their data. You supply your own dumps, and whether you may possess them is between you and
   your local law.
-- **The output.** A built `.dsk` contains Nintendo's code and artwork. It is not this
-  project's to license and no grant here extends to it. Do not redistribute it.
-- **Third-party code.** The controller routine is Adrian Black's work, licensed MIT. MIT
-  permits commercial use, so that portion stays MIT and the noncommercial restriction above
-  does not attach to it. The MIT text is reproduced at the end of [LICENSE](LICENSE); keep
-  its copyright notice with any copy you make.
+- **The output.** A built `.dsk`, `.po` or `.d64` contains Nintendo's code and artwork. None
+  of them is this project's to license and no grant here extends to them. Do not redistribute
+  them.
+- **Third-party code.** The controller routine is Adrian Black's work, licensed MIT, and the
+  C64 image carries the drive loader from Krill's Loader, licensed 3-clause BSD. Both permit
+  commercial use, so those portions keep their own licenses and the noncommercial restriction
+  above does not attach to them. Both texts are reproduced at the end of [LICENSE](LICENSE);
+  keep their copyright notices with any copy you make.
