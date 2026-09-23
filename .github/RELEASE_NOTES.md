@@ -15,10 +15,12 @@ payload and APU divide table come out byte-identical, and its VERA upload is
 the same seven chunks in a different frame, so neither is a separate build that
 could drift away from the other two.
 
-This release changes documentation only. The binaries are the same ones v1.1
-shipped, so there is nothing to re-download if you already have them. The
-README now says up front that the tool builds the C64 disk as well, and credits
-Krill, whose loader that disk boots through.
+This release fixes a bug in the `.d64` directory. Filenames shorter than the
+16-byte field were padded from whatever followed the name in memory, so each
+entry carried a few stray bytes of the next name or of the disk title. Files
+read back correctly either way, which is why it went unnoticed, but a drive
+listing the directory shows the stray bytes, and two compilers did not produce
+the same disk. If you built a `.d64` with v1.1 or v1.2, build it again.
 
 The `.d64` does not reproduce the disk images shipped from the C64 port's own
 tree byte for byte, because those were written by many rounds of `c1541`
