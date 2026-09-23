@@ -243,7 +243,7 @@ crc32b (const unsigned char *p, long n)
  * look at rather than leaving the user with a plausible-looking .dsk. */
 #define CRC_DISK        0x8875B7F8UL
 #define CRC_PO          0xA15C62CBUL
-#define CRC_D64         0x35E23C9FUL
+#define CRC_D64         0x23A2D7FCUL
 
 /*
  * Structural validation alone is not enough, and the gap is large.  Running

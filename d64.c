@@ -91,10 +91,19 @@ next_free (struct d64 *d, int *t, int *s)
 static void
 put_name (unsigned char *dst, const char *name)
 {
-  int i;
+  int i, end = 0;
 
+  /* A name shorter than the field is padded with $A0.  Stop AT the
+     terminator: walking past it reads whatever the linker put next, which is
+     another literal, and it lands in the directory.  That is invisible here,
+     because the pad byte the terminator becomes still ends the name, but a
+     drive lists the rest and two compilers do not produce the same disk. */
   for (i = 0; i < 16; i++)
-    dst[i] = (unsigned char) (name[i] ? name[i] : 0xA0);
+    {
+      if (!end && !name[i])
+        end = 1;
+      dst[i] = end ? 0xA0 : (unsigned char) name[i];
+    }
 }
 
 /* the BAM's per-track bitmap: a set bit is a FREE sector */

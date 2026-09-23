@@ -44,7 +44,7 @@ wrote out/smb1_vera.po (819200 bytes)
   CRC32 A15C62CB -- matches the shipped 800K image
 wrote out/smb1_vera.d64 (174848 bytes)
   10 files on a 1541 image
-  CRC32 35E23C9F -- matches the expected 1541 image
+  CRC32 23A2D7FC -- matches the expected 1541 image
 ```
 
 With no arguments the tool writes three images and checks all of them itself, exiting nonzero

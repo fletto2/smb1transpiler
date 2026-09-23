@@ -8,7 +8,7 @@ verifies the CRC32 of each:
 | --- | --- | --- |
 | `out/smb1_vera.dsk` | Apple II, 140K 5.25" | `8875B7F8` |
 | `out/smb1_vera.po` | Apple II, 800K ProDOS | `A15C62CB` |
-| `out/smb1_vera.d64` | Commodore 64 + VERA, 1541 | `35E23C9F` |
+| `out/smb1_vera.d64` | Commodore 64 + VERA, 1541 | `23A2D7FC` |
 
 The `.po` and the `.d64` both carry the same game as the `.dsk`. The C64
 payload and APU divide table come out byte-identical, and its VERA upload is
