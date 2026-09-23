@@ -10,10 +10,15 @@ verifies the CRC32 of each:
 | `out/smb1_vera.po` | Apple II, 800K ProDOS | `A15C62CB` |
 | `out/smb1_vera.d64` | Commodore 64 + VERA, 1541 | `35E23C9F` |
 
-New in this release are the `.po` and the `.d64`. Both carry the same game as
-the `.dsk` -- the C64 payload and APU divide table come out byte-identical, and
-its VERA upload is the same seven chunks in a different frame -- so neither is
-a separate build that could drift away from the other two.
+The `.po` and the `.d64` both carry the same game as the `.dsk`. The C64
+payload and APU divide table come out byte-identical, and its VERA upload is
+the same seven chunks in a different frame, so neither is a separate build that
+could drift away from the other two.
+
+This release changes documentation only. The binaries are the same ones v1.1
+shipped, so there is nothing to re-download if you already have them. The
+README now says up front that the tool builds the C64 disk as well, and credits
+Krill, whose loader that disk boots through.
 
 The `.d64` does not reproduce the disk images shipped from the C64 port's own
 tree byte for byte, because those were written by many rounds of `c1541`
