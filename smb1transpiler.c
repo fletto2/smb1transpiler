@@ -439,12 +439,15 @@ build_tileset (const struct rom *smas, const struct rom *nes,
   return 0;
 }
 
-/* The C64 port's images are the Apple II ones with a handful of bytes moved,
-   so they ship as a delta rather than a second copy: varint-delta offsets in
-   one table, the replacement bytes in the other. */
-static void
+/* The C64 build differs from the Apple II one by a single rewrite: it moves
+   zero page $00/$01 to $28/$29.  So the tables are offsets only and the rule
+   is applied here -- which also means no byte of the game image is carried in
+   the header.  A site that does not hold $00 or $01 means the two builds have
+   drifted apart, so say so rather than writing a disk nobody can explain. */
+static int
 c64_patch (unsigned char *dst, const unsigned char *src, long len,
-           const unsigned char *off, const unsigned char *val, int count)
+           const unsigned char *off, int count, const char *what,
+           char *err, size_t errsz)
 {
   long o = 0, pos = 0, v;
   unsigned char b;
@@ -461,8 +464,15 @@ c64_patch (unsigned char *dst, const unsigned char *src, long len,
             break;
         }
       o += v;
-      dst[o] = val[i];
+      if (o >= len || (dst[o] != 0x00 && dst[o] != 0x01))
+        {
+          snprintf (err, errsz, "the C64 %s wants a zero-page operand at %ld, "
+                    "and that byte is not $00 or $01", what, o);
+          return -1;
+        }
+      dst[o] = (unsigned char) (dst[o] + 0x28);
     }
+  return 0;
 }
 
 /* a PRG on disk is a little-endian load address followed by the bytes */
@@ -743,6 +753,20 @@ build_disk (const struct rom *nes, const struct rom *smas,
       goto err_free_vram;
     }
   ret = write_file (outdir, "smb1_vera.dsk", dsk.img, DSK_BYTES);
+  crc = crc32b (dsk.img, DSK_BYTES);
+  if (crc == CRC_DISK)
+    {
+      printf ("  CRC32 %08lX -- matches the shipped disk\n", crc);
+    }
+  else
+    {
+      printf ("  CRC32 %08lX -- does NOT match the shipped disk "
+              "(%08lX)\n", crc, CRC_DISK);
+      if (vram_path)
+        printf ("  (a reference VERA stream was supplied; try "
+                "without --vram)\n");
+      ret = 1;
+    }
 
   /* The 800K ProDOS image carries the same content, so lay it out from the
      140K one instead of building it twice -- two independent builds drift,
@@ -768,10 +792,11 @@ build_disk (const struct rom *nes, const struct rom *smas,
         fprintf (stderr, "ProDOS layout FAILED: %s\n", err);
         goto err_free_vram;
       }
-    printf ("  ProDOS: boot block 0 | resident blocks 512-%d | tracks 2-34 "
-            "mapped from block 16\n",
+    if (write_file (outdir, "smb1_vera.po", po.img, PO_BYTES))
+      ret = 1;
+    printf ("  boot block 0 | resident blocks 512-%d | tracks 2-34 mapped "
+            "from block 16\n",
             512 + (int) ((sizeof (blob_resident_po) - 1) / 512));
-    write_file (outdir, "smb1_vera.po", po.img, PO_BYTES);
     pcrc = crc32b (po.img, PO_BYTES);
     if (pcrc == CRC_PO)
       printf ("  CRC32 %08lX -- matches the shipped 800K image\n", pcrc);
@@ -796,14 +821,26 @@ build_disk (const struct rom *nes, const struct rom *smas,
     unsigned long dcrc;
     long n;
 
-    c64_patch (tmp, game, sizeof (game), c64_game_off, c64_game_val,
-               C64_GAME_COUNT);
+    if (c64_patch (tmp, game, sizeof (game), c64_game_off, C64_GAME_COUNT,
+                   "game", err, sizeof (err)))
+      {
+        fprintf (stderr, "C64 build FAILED: %s\n", err);
+        goto err_free_vram;
+      }
     prg (cgame, 0x0800, tmp, sizeof (game));
-    c64_patch (tmp, blob_resident, sizeof (blob_resident), c64_resid_off,
-               c64_resid_val, C64_RESID_COUNT);
+    if (c64_patch (tmp, blob_resident, sizeof (blob_resident), c64_resid_off,
+                   C64_RESID_COUNT, "resident", err, sizeof (err)))
+      {
+        fprintf (stderr, "C64 build FAILED: %s\n", err);
+        goto err_free_vram;
+      }
     prg (cresid, 0x9000, tmp, sizeof (blob_resident));
-    c64_patch (tmp, blob_lc_audio, sizeof (blob_lc_audio), c64_lcaud_off,
-               c64_lcaud_val, C64_LCAUD_COUNT);
+    if (c64_patch (tmp, blob_lc_audio, sizeof (blob_lc_audio), c64_lcaud_off,
+                   C64_LCAUD_COUNT, "LC audio", err, sizeof (err)))
+      {
+        fprintf (stderr, "C64 build FAILED: %s\n", err);
+        goto err_free_vram;
+      }
     prg (clcaud, 0xE000, tmp, sizeof (blob_lc_audio));
     build_qdiv (tmp);
     prg (clut, 0x0800, tmp, 4096);
@@ -851,8 +888,9 @@ build_disk (const struct rom *nes, const struct rom *smas,
         fprintf (stderr, "C64 layout FAILED: %s\n", err);
         goto err_free_vram;
       }
-    printf ("  C64: 10 files on a 1541 image\n");
-    write_file (outdir, "smb1_vera.d64", d64.img, D64_BYTES);
+    if (write_file (outdir, "smb1_vera.d64", d64.img, D64_BYTES))
+      ret = 1;
+    printf ("  10 files on a 1541 image\n");
     /* Not the shipped beta4 image byte for byte -- that one's sectors record
        a dozen rounds of c1541 edits.  This layout is our own and is
        deterministic, so pin it and catch drift. */
@@ -866,21 +904,6 @@ build_disk (const struct rom *nes, const struct rom *smas,
         ret = 1;
       }
   }
-
-  crc = crc32b (dsk.img, DSK_BYTES);
-  if (crc == CRC_DISK)
-    {
-      printf ("  CRC32 %08lX -- matches the shipped disk\n", crc);
-    }
-  else
-    {
-      printf ("  CRC32 %08lX -- does NOT match the shipped disk "
-              "(%08lX)\n", crc, CRC_DISK);
-      if (vram_path)
-        printf ("  (a reference VERA stream was supplied; try "
-                "without --vram)\n");
-      ret = 1;
-    }
 
 err_free_vram:
   free (vram);

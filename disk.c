@@ -69,7 +69,7 @@ disk_payload_off (long off)
   long page = off / SEC_BYTES;
 
   return (long) (PAY_TRK + page / 16) * 16 * SEC_BYTES
-         + (long) p2l[page % 16] * SEC_BYTES + off % SEC_BYTES;
+    + (long) p2l[page % 16] * SEC_BYTES + off % SEC_BYTES;
 }
 
 /*

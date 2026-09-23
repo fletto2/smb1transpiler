@@ -22,14 +22,14 @@ Portable C99 with no libraries beyond the standard one. Linux, macOS and BSD bui
 line above. **Windows** builds the same sources with MinGW or MSVC:
 
 ```
-gcc -O2 -o smb1transpiler.exe *.c                                       REM MinGW
+gcc -O2 -o smb1transpiler.exe *.c                                           REM MinGW
 cl /O2 /Fe:smb1transpiler.exe smb1transpiler.c sprites.c disk.c po.c d64.c   REM MSVC
 ```
 
 Listing a directory is the one thing C does not standardise, so `dirscan_*()` wraps `dirent`
 and `FindFirstFile`; everything else is the same code on every platform. Verified by
-building with MinGW-w64 for both x86_64 and i686 and running each `.exe`: both write the
-byte-exact disk.
+building with MinGW-w64 for both x86_64 and i686 and running each `.exe`: both write all
+three images byte-exact.
 
 ```
 NES  SMB1 : smb1.nes  (40976 bytes, CHR at 0x8010)
@@ -63,9 +63,13 @@ requests into that arithmetic, and no call site had to change.
 The `.d64` is the same game again. Its payload and APU divide LUT come out byte-identical to
 the Apple II ones, its VERA upload is the same seven chunks written back to back instead of
 padded to sector boundaries behind a header sector, and the three images that do differ --
-the game, the resident and the LC audio -- are carried as delta tables rather than second
-copies, 311 bytes between them. What is genuinely C64 is the boot program and Krill's drive
-loader.
+the game, the resident and the LC audio -- differ by one mechanical rewrite and nothing else.
+The C64 build moves zero page `$00`/`$01` to `$28`/`$29`, so those three ship as a list of
+offsets and the rule is applied at build time. There are 311 such sites and they are checked:
+a site whose byte is not `$00` or `$01` fails the build rather than producing a disk nobody
+can account for. Offsets rather than replacement bytes also keeps the guarantee sharp, since
+no byte out of a game image enters the header at all. What is genuinely C64 is the boot
+program and Krill's drive loader.
 
 It does **not** reproduce the shipped beta4 image byte for byte, and is not trying to. That
 image was written by a dozen rounds of `c1541` delete-and-rewrite, so its sector allocation
