@@ -242,6 +242,7 @@ crc32b (const unsigned char *p, long n)
  * mismatch here means one of them drifted, and the message says which half to
  * look at rather than leaving the user with a plausible-looking .dsk. */
 #define CRC_DISK        0x8875B7F8UL
+#define CRC_PO          0xA15C62CBUL
 
 /*
  * Structural validation alone is not enough, and the gap is large.  Running
@@ -681,6 +682,45 @@ build_disk (const struct rom *nes, const struct rom *smas,
       goto err_free_vram;
     }
   ret = write_file (outdir, "smb1_vera.dsk", dsk.img, DSK_BYTES);
+
+  /* The 800K ProDOS image carries the same content, so lay it out from the
+     140K one instead of building it twice -- two independent builds drift,
+     and the symptom is a wrong track on a real drive, not a failed build.
+     Only the rwts entry the payload calls differs between them. */
+  {
+    static struct disk pdsk;
+    static struct po po;
+    unsigned long pcrc;
+    int i;
+
+    pdsk = dsk;
+    for (i = 0; i < PO_PATCH_COUNT; i++)
+      {
+        long o = po_payload_off[i * 2] | (po_payload_off[i * 2 + 1] << 8);
+
+        pdsk.img[disk_payload_off (o)] = po_payload_val[i];
+      }
+    if (po_build (&po, &pdsk, blob_boot_po, sizeof (blob_boot_po),
+                  blob_resident_po, sizeof (blob_resident_po),
+                  err, sizeof (err)))
+      {
+        fprintf (stderr, "ProDOS layout FAILED: %s\n", err);
+        goto err_free_vram;
+      }
+    printf ("  ProDOS: boot block 0 | resident blocks 512-%d | tracks 2-34 "
+            "mapped from block 16\n",
+            512 + (int) ((sizeof (blob_resident_po) - 1) / 512));
+    write_file (outdir, "smb1_vera.po", po.img, PO_BYTES);
+    pcrc = crc32b (po.img, PO_BYTES);
+    if (pcrc == CRC_PO)
+      printf ("  CRC32 %08lX -- matches the shipped 800K image\n", pcrc);
+    else
+      {
+        printf ("  CRC32 %08lX -- does NOT match the shipped 800K image "
+                "(%08lX)\n", pcrc, CRC_PO);
+        ret = 1;
+      }
+  }
 
   crc = crc32b (dsk.img, DSK_BYTES);
   if (crc == CRC_DISK)

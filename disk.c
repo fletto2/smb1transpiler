@@ -59,6 +59,20 @@ put_run (struct disk *d, int trk, const unsigned char *p, long len)
 }
 
 /*
+ * Where a byte of the payload blob lands in the image.  The .po build has to
+ * reach two of them, and this is the file that knows the layout, so it does
+ * the arithmetic rather than handing the constants out.
+ */
+long
+disk_payload_off (long off)
+{
+  long page = off / SEC_BYTES;
+
+  return (long) (PAY_TRK + page / 16) * 16 * SEC_BYTES
+         + (long) p2l[page % 16] * SEC_BYTES + off % SEC_BYTES;
+}
+
+/*
  * The APU divide LUT: QP[p] = floor(300240/(p+1)) & $FFFF, lo half then hi.
  * One table serves the pulse (300240) and the triangle (150120), because
  * 300240 == 2*150120 and floor(floor(2N/d)/2) == floor(N/d); the LC code just

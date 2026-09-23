@@ -9,6 +9,7 @@
 #define NES_TILE_BYTES  16      /* 8x8 2bpp planar                      */
 #define NTILES          768     /* the L0 tileset the port loads        */
 #define DSK_BYTES       (35 * 16 * 256)
+#define PO_BYTES        (1600 * 512)
 
 /* A loaded dump.  base is nonzero when a .smc carried a 512-byte copier
  * header, so every ROM offset is data + base + off. */
@@ -23,6 +24,11 @@ struct rom
 struct disk
 {
   unsigned char img[DSK_BYTES];
+};
+
+struct po
+{
+  unsigned char img[PO_BYTES];
 };
 
 /* sprites.c */
@@ -41,5 +47,12 @@ int disk_build (struct disk *d,
                 const unsigned char *vram, long vram_len,
                 const unsigned char *lcaud, long lcaud_len,
                 char *err, size_t errsz);
+long disk_payload_off (long off);
+
+/* po.c */
+int po_build (struct po *p, const struct disk *d,
+              const unsigned char *boot, long boot_len,
+              const unsigned char *resid, long resid_len,
+              char *err, size_t errsz);
 
 #endif /* SMB1TRANSPILER_H */

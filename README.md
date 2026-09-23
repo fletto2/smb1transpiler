@@ -15,15 +15,15 @@ them, and the port's own 6502 code. Supply the two dumps and the tool derives th
 
 ```sh
 make                                    # or: cc -O2 -o smb1transpiler *.c
-./smb1transpiler                        # writes out/smb1_vera.dsk
+./smb1transpiler                        # writes out/smb1_vera.dsk and .po
 ```
 
 Portable C99 with no libraries beyond the standard one. Linux, macOS and BSD build with the
 line above. **Windows** builds the same sources with MinGW or MSVC:
 
 ```
-gcc -O2 -o smb1transpiler.exe smb1transpiler.c sprites.c disk.c    REM MinGW
-cl /O2 /Fe:smb1transpiler.exe smb1transpiler.c sprites.c disk.c    REM MSVC
+gcc -O2 -o smb1transpiler.exe *.c                                  REM MinGW
+cl /O2 /Fe:smb1transpiler.exe smb1transpiler.c sprites.c disk.c po.c   REM MSVC
 ```
 
 Listing a directory is the one thing C does not standardise, so `dirscan_*()` wraps `dirent`
@@ -36,11 +36,25 @@ NES  SMB1 : smb1.nes  (40976 bytes, CHR at 0x8010)
 SNES SMAS : smas.sfc  (2097152 bytes)
 ...
 wrote out/smb1_vera.dsk (143360 bytes)
+  ProDOS: boot block 0 | resident blocks 512-523 | tracks 2-34 mapped from block 16
+wrote out/smb1_vera.po (819200 bytes)
+  CRC32 A15C62CB -- matches the shipped 800K image
   CRC32 8875B7F8 -- matches the shipped disk
 ```
 
-With no arguments the tool writes a 143,360-byte `.dsk` that is md5-identical to the shipped
-`smb1_vera.dsk` (`94b439ba`), checks that itself, and exits nonzero on a mismatch.
+With no arguments the tool writes two images and checks both itself, exiting nonzero on a
+mismatch: a 143,360-byte `.dsk` that is md5-identical to the shipped `smb1_vera.dsk`
+(`94b439ba`), and the 819,200-byte 800K ProDOS `.po`.
+
+The `.po` is laid out from the `.dsk` rather than built a second time. Everything it ships is
+the same bytes, so rebuilding it independently would only create a way for the two to drift,
+and that failure shows up as a wrong track on a real drive rather than as a failed build. Two
+things do differ: ProDOS reads 512-byte blocks, so the port carries a second resident built on
+`rwts_po` and a boot block of its own; and the payload reaches the rwts entry by address, which
+the two residents put in different places, so four bytes of the payload are patched on the way
+in. The sector map is deliberately dumb -- logical sector `track*16 + sector` lands in block
+`L/2`, low half first -- because `rwts_po` turns the resident's existing (track, sector)
+requests into that arithmetic, and no call site had to change.
 
 Other flags: `--verify tiles_vera.bin` for a per-block tileset report, `--vram vram.dat` to
 overwrite a reference stream instead of building one, `--out DIR`, and `--force` to build
