@@ -15,15 +15,15 @@ them, and the port's own 6502 code. Supply the two dumps and the tool derives th
 
 ```sh
 make                                    # or: cc -O2 -o smb1transpiler *.c
-./smb1transpiler                        # writes out/smb1_vera.dsk and .po
+./smb1transpiler                        # writes out/smb1_vera.{dsk,po,d64}
 ```
 
 Portable C99 with no libraries beyond the standard one. Linux, macOS and BSD build with the
 line above. **Windows** builds the same sources with MinGW or MSVC:
 
 ```
-gcc -O2 -o smb1transpiler.exe *.c                                  REM MinGW
-cl /O2 /Fe:smb1transpiler.exe smb1transpiler.c sprites.c disk.c po.c   REM MSVC
+gcc -O2 -o smb1transpiler.exe *.c                                       REM MinGW
+cl /O2 /Fe:smb1transpiler.exe smb1transpiler.c sprites.c disk.c po.c d64.c   REM MSVC
 ```
 
 Listing a directory is the one thing C does not standardise, so `dirscan_*()` wraps `dirent`
@@ -39,12 +39,16 @@ wrote out/smb1_vera.dsk (143360 bytes)
   ProDOS: boot block 0 | resident blocks 512-523 | tracks 2-34 mapped from block 16
 wrote out/smb1_vera.po (819200 bytes)
   CRC32 A15C62CB -- matches the shipped 800K image
+  C64: 10 files on a 1541 image
+wrote out/smb1_vera.d64 (174848 bytes)
+  CRC32 35E23C9F -- matches the expected 1541 image
   CRC32 8875B7F8 -- matches the shipped disk
 ```
 
-With no arguments the tool writes two images and checks both itself, exiting nonzero on a
-mismatch: a 143,360-byte `.dsk` that is md5-identical to the shipped `smb1_vera.dsk`
-(`94b439ba`), and the 819,200-byte 800K ProDOS `.po`.
+With no arguments the tool writes three images and checks all of them itself, exiting nonzero
+on a mismatch: a 143,360-byte `.dsk` that is md5-identical to the shipped `smb1_vera.dsk`
+(`94b439ba`), the 819,200-byte 800K ProDOS `.po`, and a 174,848-byte `.d64` for the C64 +
+VERA port.
 
 The `.po` is laid out from the `.dsk` rather than built a second time. Everything it ships is
 the same bytes, so rebuilding it independently would only create a way for the two to drift,
@@ -55,6 +59,20 @@ the two residents put in different places, so four bytes of the payload are patc
 in. The sector map is deliberately dumb -- logical sector `track*16 + sector` lands in block
 `L/2`, low half first -- because `rwts_po` turns the resident's existing (track, sector)
 requests into that arithmetic, and no call site had to change.
+
+The `.d64` is the same game again. Its payload and APU divide LUT come out byte-identical to
+the Apple II ones, its VERA upload is the same seven chunks written back to back instead of
+padded to sector boundaries behind a header sector, and the three images that do differ --
+the game, the resident and the LC audio -- are carried as delta tables rather than second
+copies, 311 bytes between them. What is genuinely C64 is the boot program and Krill's drive
+loader.
+
+It does **not** reproduce the shipped beta4 image byte for byte, and is not trying to. That
+image was written by a dozen rounds of `c1541` delete-and-rewrite, so its sector allocation
+records the order those edits happened in -- `PAYLD` starts at 10/19 and runs backwards into
+track 9 -- and no layout rule reproduces it. The check that replaces it is the one a drive
+actually cares about: every file read back off the generated image is byte-identical to the
+shipped disk's, all ten of them, and the image boots to the title screen.
 
 Other flags: `--verify tiles_vera.bin` for a per-block tileset report, `--vram vram.dat` to
 overwrite a reference stream instead of building one, `--out DIR`, and `--force` to build

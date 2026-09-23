@@ -19,7 +19,7 @@ jobs:
       - name: Build (clang)
         run: |
           cc -std=c99 -pedantic -Wall -Wextra -Werror -O2 \
-              -o smb1transpiler smb1transpiler.c sprites.c disk.c po.c
+              -o smb1transpiler smb1transpiler.c sprites.c disk.c po.c d64.c
       - name: Smoke test (no ROMs present)
         run: |
           mkdir empty && cd empty
@@ -40,7 +40,7 @@ jobs:
         shell: bash
         run: |
           gcc -std=c99 -pedantic -Wall -Wextra -Werror -O2 -static \
-              -o smb1transpiler.exe smb1transpiler.c sprites.c disk.c po.c
+              -o smb1transpiler.exe smb1transpiler.c sprites.c disk.c po.c d64.c
       - name: Smoke test (no ROMs present)
         shell: bash
         run: |
@@ -66,7 +66,7 @@ jobs:
           for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set VSPATH=%%i
           call "%VSPATH%\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /O2 /MT /W3 /WX /D_CRT_SECURE_NO_WARNINGS ^
-             /Fe:smb1transpiler.exe smb1transpiler.c sprites.c disk.c po.c
+             /Fe:smb1transpiler.exe smb1transpiler.c sprites.c disk.c po.c d64.c
       - name: Smoke test (no ROMs present)
         shell: cmd
         run: |

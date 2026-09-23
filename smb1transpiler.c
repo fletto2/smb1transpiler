@@ -28,9 +28,9 @@
  * mode translation cannot corrupt them.
  */
 #ifdef _WIN32
-# include <windows.h>
-# include <direct.h>
-# define MKDIR(p) _mkdir (p)
+#include <windows.h>
+#include <direct.h>
+#define MKDIR(p) _mkdir (p)
 
 struct dirscan
 {
@@ -67,9 +67,9 @@ dirscan_close (struct dirscan *s)
     FindClose (s->h);
 }
 #else
-# include <dirent.h>
-# include <sys/stat.h>
-# define MKDIR(p) mkdir (p, 0777)
+#include <dirent.h>
+#include <sys/stat.h>
+#define MKDIR(p) mkdir (p, 0777)
 
 struct dirscan
 {
@@ -243,6 +243,7 @@ crc32b (const unsigned char *p, long n)
  * look at rather than leaving the user with a plausible-looking .dsk. */
 #define CRC_DISK        0x8875B7F8UL
 #define CRC_PO          0xA15C62CBUL
+#define CRC_D64         0x35E23C9FUL
 
 /*
  * Structural validation alone is not enough, and the gap is large.  Running
@@ -436,6 +437,66 @@ build_tileset (const struct rom *smas, const struct rom *nes,
   printf ("  %d direct, %d re-indexed, %d from NES CHR, %d masked\n",
           per_kind[0], per_kind[1], per_kind[2], per_kind[3]);
   return 0;
+}
+
+/* The C64 port's images are the Apple II ones with a handful of bytes moved,
+   so they ship as a delta rather than a second copy: varint-delta offsets in
+   one table, the replacement bytes in the other. */
+static void
+c64_patch (unsigned char *dst, const unsigned char *src, long len,
+           const unsigned char *off, const unsigned char *val, int count)
+{
+  long o = 0, pos = 0, v;
+  unsigned char b;
+  int i, sh;
+
+  memcpy (dst, src, (size_t) len);
+  for (i = 0; i < count; i++)
+    {
+      for (v = 0, sh = 0;; sh += 7)
+        {
+          b = off[pos++];
+          v |= (long) (b & 0x7F) << sh;
+          if (!(b & 0x80))
+            break;
+        }
+      o += v;
+      dst[o] = val[i];
+    }
+}
+
+/* a PRG on disk is a little-endian load address followed by the bytes */
+static long
+prg (unsigned char *out, unsigned addr, const unsigned char *p, long len)
+{
+  out[0] = (unsigned char) (addr & 0xFF);
+  out[1] = (unsigned char) (addr >> 8);
+  memcpy (out + 2, p, (size_t) len);
+  return len + 2;
+}
+
+/* Re-frame the VERA upload for the C64 loader: the same chunks, but written
+   back to back and ended by a zero length, where the .dsk keeps a header
+   sector and pads every chunk out to a sector boundary. */
+static long
+c64_vera (unsigned char *out, const unsigned char *v, int from, int to)
+{
+  long o = 2, w = 0;
+  int i, n = v[0] | (v[1] << 8);
+
+  for (i = 0; i < n; i++)
+    {
+      long len = v[o + 3] | (v[o + 4] << 8);
+
+      if (i >= from && i < to)
+        {
+          memcpy (out + w, v + o, (size_t) (5 + len));
+          w += 5 + len;
+        }
+      o += 5 + len;
+    }
+  memset (out + w, 0, 5);
+  return w + 5;
 }
 
 /* varint-delta-encoded ascending offsets; kind selects the rewrite rule */
@@ -718,6 +779,90 @@ build_disk (const struct rom *nes, const struct rom *smas,
       {
         printf ("  CRC32 %08lX -- does NOT match the shipped 800K image "
                 "(%08lX)\n", pcrc, CRC_PO);
+        ret = 1;
+      }
+  }
+
+  /* The C64 + VERA port off the same parts: the payload and the APU LUT are
+     byte-identical, the VERA upload is the chunks above in a different frame,
+     and the three images that differ carry a delta. */
+  {
+    static unsigned char cgame[32770], cresid[6146], clcaud[7576];
+    static unsigned char clut[4098], cdat[40960], cda2[32768];
+    static unsigned char cpayld[5030];
+    static unsigned char tmp[32768];
+    static struct d64 d64;
+    struct d64_file cf[10];
+    unsigned long dcrc;
+    long n;
+
+    c64_patch (tmp, game, sizeof (game), c64_game_off, c64_game_val,
+               C64_GAME_COUNT);
+    prg (cgame, 0x0800, tmp, sizeof (game));
+    c64_patch (tmp, blob_resident, sizeof (blob_resident), c64_resid_off,
+               c64_resid_val, C64_RESID_COUNT);
+    prg (cresid, 0x9000, tmp, sizeof (blob_resident));
+    c64_patch (tmp, blob_lc_audio, sizeof (blob_lc_audio), c64_lcaud_off,
+               c64_lcaud_val, C64_LCAUD_COUNT);
+    prg (clcaud, 0xE000, tmp, sizeof (blob_lc_audio));
+    build_qdiv (tmp);
+    prg (clut, 0x0800, tmp, 4096);
+    prg (cpayld, 0xA800, blob_payload, sizeof (blob_payload));
+
+    cf[0].name = "C64BOOT";
+    cf[0].data = blob_c64boot;
+    cf[0].len = sizeof (blob_c64boot);
+    n = c64_vera (cdat + 2, vram, 0, 3);
+    cdat[0] = 0x00;
+    cdat[1] = 0x08;
+    cf[1].name = "VRAMDAT";
+    cf[1].data = cdat;
+    cf[1].len = n + 2;
+    cf[2].name = "GAME";
+    cf[2].data = cgame;
+    cf[2].len = (long) sizeof (game) + 2;
+    cf[3].name = "RESID";
+    cf[3].data = cresid;
+    cf[3].len = (long) sizeof (blob_resident) + 2;
+    cf[4].name = "PAYLD";
+    cf[4].data = cpayld;
+    cf[4].len = (long) sizeof (blob_payload) + 2;
+    cf[5].name = "LUT";
+    cf[5].data = clut;
+    cf[5].len = 4098;
+    cf[6].name = "LCAUD";
+    cf[6].data = clcaud;
+    cf[6].len = (long) sizeof (blob_lc_audio) + 2;
+    cf[7].name = "LOADER";
+    cf[7].data = blob_krill_loader;
+    cf[7].len = sizeof (blob_krill_loader);
+    cf[8].name = "INSTALL";
+    cf[8].data = blob_krill_install;
+    cf[8].len = sizeof (blob_krill_install);
+    n = c64_vera (cda2 + 2, vram, 3, 7);
+    cda2[0] = 0x00;
+    cda2[1] = 0x08;
+    cf[9].name = "VRAMDA2";
+    cf[9].data = cda2;
+    cf[9].len = n + 2;
+
+    if (d64_build (&d64, cf, 10, "SMB1 VERA", err, sizeof (err)))
+      {
+        fprintf (stderr, "C64 layout FAILED: %s\n", err);
+        goto err_free_vram;
+      }
+    printf ("  C64: 10 files on a 1541 image\n");
+    write_file (outdir, "smb1_vera.d64", d64.img, D64_BYTES);
+    /* Not the shipped beta4 image byte for byte -- that one's sectors record
+       a dozen rounds of c1541 edits.  This layout is our own and is
+       deterministic, so pin it and catch drift. */
+    dcrc = crc32b (d64.img, D64_BYTES);
+    if (dcrc == CRC_D64)
+      printf ("  CRC32 %08lX -- matches the expected 1541 image\n", dcrc);
+    else
+      {
+        printf ("  CRC32 %08lX -- does NOT match the expected 1541 image "
+                "(%08lX)\n", dcrc, CRC_D64);
         ret = 1;
       }
   }

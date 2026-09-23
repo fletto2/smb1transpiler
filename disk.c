@@ -80,7 +80,7 @@ disk_payload_off (long off)
  * quotient overflows 16 bits) are excluded by qdivt in the 6502, not here, so
  * assert the property rather than trust it.
  */
-static int
+int
 build_qdiv (unsigned char *out)
 {
   unsigned q[2048];

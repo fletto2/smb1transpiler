@@ -10,6 +10,7 @@
 #define NTILES          768     /* the L0 tileset the port loads        */
 #define DSK_BYTES       (35 * 16 * 256)
 #define PO_BYTES        (1600 * 512)
+#define D64_BYTES       (683 * 256)
 
 /* A loaded dump.  base is nonzero when a .smc carried a 512-byte copier
  * header, so every ROM offset is data + base + off. */
@@ -31,6 +32,19 @@ struct po
   unsigned char img[PO_BYTES];
 };
 
+struct d64
+{
+  unsigned char img[D64_BYTES];
+  unsigned char used[36][21];
+};
+
+struct d64_file
+{
+  const char *name;
+  const unsigned char *data;
+  long len;
+};
+
 /* sprites.c */
 int build_sprite_sheets (const struct rom *smas, const unsigned char *chr,
                          unsigned char *b0a, unsigned char *b07);
@@ -48,11 +62,16 @@ int disk_build (struct disk *d,
                 const unsigned char *lcaud, long lcaud_len,
                 char *err, size_t errsz);
 long disk_payload_off (long off);
+int build_qdiv (unsigned char *out);
 
 /* po.c */
 int po_build (struct po *p, const struct disk *d,
               const unsigned char *boot, long boot_len,
               const unsigned char *resid, long resid_len,
               char *err, size_t errsz);
+
+/* d64.c */
+int d64_build (struct d64 *d, const struct d64_file *files, int nfiles,
+               const char *title, char *err, size_t errsz);
 
 #endif /* SMB1TRANSPILER_H */
