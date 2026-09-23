@@ -2,9 +2,10 @@
 
 Rebuild the
 [a2vera](https://lectronz.com/products/a2vera-apple-ii-vera-video-card-with-fm-audio)
-Apple II + VERA port of *Super Mario Bros 1* from your own ROMs, using only a C compiler.
-No assembler, no Python, no emulator. It writes three disks: the 140K Apple II 5.25", the
-800K ProDOS version of it, and the 1541 image for the C64 + VERA port of the same game.
+Apple II + VERA port of *Super Mario Bros 1*, and its Commodore 64 sibling, from your own
+ROMs using only a C compiler. No assembler, no Python, no emulator. It writes three disks:
+the 140K Apple II 5.25", the 800K ProDOS version of it, and a 1541 image of the same game
+for a C64 with a VERA cartridge.
 
 The port draws SMB1 with *Super Mario All-Stars* artwork. Neither ROM may be redistributed,
 so this repository ships no Nintendo data at all, down to individual tiles and palette
@@ -57,27 +58,26 @@ and that failure shows up as a wrong track on a real drive rather than as a fail
 things do differ: ProDOS reads 512-byte blocks, so the port carries a second resident built on
 `rwts_po` and a boot block of its own; and the payload reaches the rwts entry by address, which
 the two residents put in different places, so four bytes of the payload are patched on the way
-in. The sector map is deliberately dumb -- logical sector `track*16 + sector` lands in block
-`L/2`, low half first -- because `rwts_po` turns the resident's existing (track, sector)
+in. The sector map is deliberately dumb. Logical sector `track*16 + sector` lands in block
+`L/2`, low half first, because `rwts_po` turns the resident's existing (track, sector)
 requests into that arithmetic, and no call site had to change.
 
 The `.d64` is the same game again. Its payload and APU divide LUT come out byte-identical to
-the Apple II ones, its VERA upload is the same seven chunks written back to back instead of
-padded to sector boundaries behind a header sector, and the three images that do differ --
-the game, the resident and the LC audio -- differ by one mechanical rewrite and nothing else.
-The C64 build moves zero page `$00`/`$01` to `$28`/`$29`, so those three ship as a list of
-offsets and the rule is applied at build time. There are 311 such sites and they are checked:
-a site whose byte is not `$00` or `$01` fails the build rather than producing a disk nobody
-can account for. Offsets rather than replacement bytes also keeps the guarantee sharp, since
-no byte out of a game image enters the header at all. What is genuinely C64 is the boot
-program and Krill's drive loader.
+the Apple II ones, and its VERA upload is the same seven chunks written back to back instead
+of padded to sector boundaries behind a header sector. The three images that do differ (the
+game, the resident and the LC audio) differ by one mechanical rewrite and nothing else: the
+C64 build moves zero page `$00`/`$01` to `$28`/`$29`. So those three ship as a list of offsets
+and the rule is applied at build time. There are 311 such sites and they are checked. A site
+whose byte is not `$00` or `$01` fails the build instead of producing a disk nobody can
+account for. Offsets also keep the guarantee sharp, since no byte out of a game image enters
+the header at all. What is genuinely C64 is the boot program and Krill's drive loader.
 
-It does **not** reproduce the shipped beta4 image byte for byte, and is not trying to. That
-image was written by a dozen rounds of `c1541` delete-and-rewrite, so its sector allocation
-records the order those edits happened in -- `PAYLD` starts at 10/19 and runs backwards into
-track 9 -- and no layout rule reproduces it. The check that replaces it is the one a drive
+It does **not** reproduce the disk images the C64 port itself ships, and is not trying to.
+Those were written by many rounds of `c1541` delete-and-rewrite, so their sector allocation
+records the order those edits happened in. `PAYLD` starts at 10/19 and runs backwards into
+track 9, and no layout rule reproduces that. The check that replaces it is the one a drive
 actually cares about: every file read back off the generated image is byte-identical to the
-shipped disk's, all ten of them, and the image boots to the title screen.
+one on those disks, all ten of them, and the image boots to the title screen.
 
 Other flags: `--verify tiles_vera.bin` for a per-block tileset report, `--vram vram.dat` to
 overwrite a reference stream instead of building one, `--out DIR`, and `--force` to build
@@ -143,6 +143,10 @@ sector) through the DOS 3.3 skew. The track map is a contract with `resident.asm
 LC-audio and APU-LUT tracks are computed from the VRAM stream's real length and cross-checked
 against the numbers the shipped payload was patched with, so growing the art fails the build
 instead of streaming audio off the wrong track.
+
+`po.c` and `d64.c` write the other two images, and neither builds the game again. The ProDOS
+one re-maps the image above into 512-byte blocks; the 1541 one takes the same chunks and the
+same payload and gives them a directory and a BAM.
 
 ### The APU divide LUT
 
