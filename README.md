@@ -86,7 +86,7 @@ from a dump whose fingerprint does not match.
 ## Experimental: original NES graphics (`--nesgfx`)
 
 ```sh
-./smb1transpiler --nesgfx               # writes out/nesgfx_smb1_vera.{dsk,po}
+./smb1transpiler --nesgfx               # writes out/nesgfx_smb1_vera_slot4.{dsk,po}
 ```
 
 Builds the same port drawn with the 1985 NES artwork and colours instead of SMAS. Only the
@@ -109,7 +109,7 @@ replaces the VERA chunks; its header comment lists every patch site and why.
 
 The published port reaches VERA at fixed `$C400` addresses, so it only works in slot 4.
 `--slot N` moves all of them (146 sites, counted and checked) to another slot, e.g.
-`./smb1transpiler --nesgfx --slot 7`. It does not detect the slot at runtime.
+`./smb1transpiler --nesgfx --slot 7`, which writes `nesgfx_smb1_vera_slot7.{dsk,po}`. It does not detect the slot at runtime.
 
 No CRC is pinned for these images and no `.d64` is written. This mode has not yet been run
 on hardware.

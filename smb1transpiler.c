@@ -943,7 +943,7 @@ build_disk_nesgfx (const struct rom *nes, long chr_off, int slot,
   static struct po po;
   unsigned char *vram, *dat;
   long vram_len, off, a, ln;
-  char err[512];
+  char err[512], name_dsk[64], name_po[64];
   int i, nch, sub = 0;
 
   if (build_game (nes, game))
@@ -1008,6 +1008,9 @@ build_disk_nesgfx (const struct rom *nes, long chr_off, int slot,
       return -1;
     }
 
+  /* the slot is baked in, so it goes in the name */
+  snprintf (name_dsk, sizeof (name_dsk), "nesgfx_smb1_vera_slot%d.dsk", slot);
+  snprintf (name_po, sizeof (name_po), "nesgfx_smb1_vera_slot%d.po", slot);
   printf ("\nbuilding the NES-graphics disk images:\n");
   if (disk_build (&dsk, blob_boot1, sizeof (blob_boot1),
                   g.resident, sizeof (g.resident), game, sizeof (game),
@@ -1019,7 +1022,7 @@ build_disk_nesgfx (const struct rom *nes, long chr_off, int slot,
       return -1;
     }
   free (vram);
-  if (write_file (outdir, "nesgfx_smb1_vera.dsk", dsk.img, DSK_BYTES))
+  if (write_file (outdir, name_dsk, dsk.img, DSK_BYTES))
     return -1;
   printf ("  CRC32 %08lX\n", crc32b (dsk.img, DSK_BYTES));
 
@@ -1036,7 +1039,7 @@ build_disk_nesgfx (const struct rom *nes, long chr_off, int slot,
       fprintf (stderr, "ProDOS layout FAILED: %s\n", err);
       return -1;
     }
-  if (write_file (outdir, "nesgfx_smb1_vera.po", po.img, PO_BYTES))
+  if (write_file (outdir, name_po, po.img, PO_BYTES))
     return -1;
   printf ("  CRC32 %08lX\n", crc32b (po.img, PO_BYTES));
   return 0;
@@ -1093,7 +1096,7 @@ usage (const char *argv0)
            "match\n"
            "  --nesgfx  EXPERIMENTAL: original NES graphics instead of\n"
            "            SMAS; needs only the .nes, writes\n"
-           "            nesgfx_smb1_vera.dsk/.po\n"
+           "            nesgfx_smb1_vera_slotN.dsk/.po\n"
            "  --slot N  with --nesgfx: the VERA card's slot, 1-7 (default\n"
            "            4, the only slot the published port supports)\n",
            argv0);
