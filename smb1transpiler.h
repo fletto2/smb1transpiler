@@ -52,6 +52,24 @@ void build_palette (const struct rom *smas, unsigned char *out);
 void build_font (const unsigned char *chr, unsigned char *out);
 void build_maps (unsigned char *l0, unsigned char *l1);
 
+/* nesgfx.c -- experimental NES-graphics build.  Patched copies of the
+ * port's images, plus the VERA chunks that replace the SMAS ones. */
+struct nesgfx
+{
+  unsigned char resident[6144];
+  unsigned char resident_po[5986];
+  unsigned char payload[5028];
+  unsigned char lcaud[7574];
+  unsigned char tiles[NTILES * VERA_TILE_BYTES];
+  unsigned char spr_b0a[8192];
+  unsigned char spr_b07[8192];
+  unsigned char font[8192];
+  unsigned char pal[512];
+  unsigned mt_ptr[4];
+};
+int nesgfx_build (const unsigned char *prg, const unsigned char *chr,
+                  struct nesgfx *g, char *err, size_t errsz);
+
 /* disk.c */
 int disk_build (struct disk *d,
                 const unsigned char *boot1, long boot1_len,
