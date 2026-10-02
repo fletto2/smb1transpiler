@@ -17,7 +17,7 @@ them, and the port's own 6502 code. Supply the two dumps and the tool derives th
 
 ```sh
 make                                    # or: cc -O2 -o smb1transpiler *.c
-./smb1transpiler                        # writes out/smb1_vera.{dsk,po,d64}
+./smb1transpiler                        # writes out/smb1_vera.{dsk,po,2mg,d64}
 ```
 
 Portable C99 with no libraries beyond the standard one. Linux, macOS and BSD build with the

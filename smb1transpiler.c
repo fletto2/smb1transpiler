@@ -708,6 +708,30 @@ fill_vram (unsigned char *v, const struct rom *smas,
   return sub == nch ? 0 : -1;
 }
 
+/* the 800K image behind a 64-byte 2IMG header, which says "ProDOS order,
+   1600 blocks" in the file itself.  Floppy Emu's 3.5" mode and most
+   emulators take it without relying on the extension. */
+static int
+write_2mg (const char *outdir, const char *name, const struct po *po)
+{
+  static unsigned char img2[64 + PO_BYTES];
+  unsigned char *h = img2;
+
+  memset (h, 0, 64);
+  memcpy (h, "2IMGSMBT", 8);    /* magic, creator */
+  h[8] = 64;                    /* header length */
+  h[10] = 1;                    /* version */
+  h[12] = 1;                    /* image format: ProDOS order */
+  h[20] = (unsigned char) (1600 & 0xFF);        /* blocks */
+  h[21] = (unsigned char) (1600 >> 8);
+  h[24] = 64;                   /* data offset */
+  h[28] = (unsigned char) (PO_BYTES & 0xFF);    /* data length */
+  h[29] = (unsigned char) ((PO_BYTES >> 8) & 0xFF);
+  h[30] = (unsigned char) ((PO_BYTES >> 16) & 0xFF);
+  memcpy (img2 + 64, po->img, PO_BYTES);
+  return write_file (outdir, name, img2, (long) sizeof (img2));
+}
+
 static int
 build_disk (const struct rom *nes, const struct rom *smas,
             long chr_off, const unsigned char *tiles,
@@ -807,6 +831,8 @@ build_disk (const struct rom *nes, const struct rom *smas,
         goto err_free_vram;
       }
     if (write_file (outdir, "smb1_vera.po", po.img, PO_BYTES))
+      ret = 1;
+    if (write_2mg (outdir, "smb1_vera.2mg", &po))
       ret = 1;
     printf ("  boot block 0 | resident blocks 512-%d | tracks 2-34 mapped "
             "from block 16\n",
@@ -1033,28 +1059,8 @@ build_disk_nesgfx (const struct rom *nes, long chr_off, const char *outdir)
     return -1;
   printf ("  CRC32 %08lX\n", crc32b (po.img, PO_BYTES));
 
-  /* the same 800K image behind a 64-byte 2IMG header, which says
-     "ProDOS order, 1600 blocks" in the file rather than in its extension */
-  {
-    static unsigned char img2[64 + PO_BYTES];
-    unsigned char *h = img2;
-
-    memset (h, 0, 64);
-    memcpy (h, "2IMGSMBT", 8);  /* magic, creator */
-    h[8] = 64;                  /* header length */
-    h[10] = 1;                  /* version */
-    h[12] = 1;                  /* image format: ProDOS order */
-    h[20] = (unsigned char) (1600 & 0xFF);      /* blocks */
-    h[21] = (unsigned char) (1600 >> 8);
-    h[24] = 64;                 /* data offset */
-    h[28] = (unsigned char) (PO_BYTES & 0xFF);  /* data length */
-    h[29] = (unsigned char) ((PO_BYTES >> 8) & 0xFF);
-    h[30] = (unsigned char) ((PO_BYTES >> 16) & 0xFF);
-    memcpy (img2 + 64, po.img, PO_BYTES);
-    if (write_file (outdir, "nesgfx_smb1_vera_autoslot.2mg", img2,
-                    (long) sizeof (img2)))
-      return -1;
-  }
+  if (write_2mg (outdir, "nesgfx_smb1_vera_autoslot.2mg", &po))
+    return -1;
   return 0;
 }
 
