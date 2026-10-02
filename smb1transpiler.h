@@ -69,7 +69,6 @@ struct nesgfx
 };
 int nesgfx_build (const unsigned char *prg, const unsigned char *chr,
                   struct nesgfx *g, char *err, size_t errsz);
-int nesgfx_slot (struct nesgfx *g, int slot, char *err, size_t errsz);
 
 /* disk.c */
 int disk_build (struct disk *d,
