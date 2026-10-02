@@ -217,6 +217,67 @@ find_metatiles (const unsigned char *prg, unsigned ptr[4],
   return 0;
 }
 
+/*
+ * The port reaches VERA through absolute $C400-$C41F operands: slot 4,
+ * hard-wired, in every published build.  Move them to slot n.  A site is an
+ * absolute-mode opcode followed by $00-$1F, $C4.  Checked against a
+ * disassembly of each image: every match is code, including the ones da65
+ * mis-syncs on ($9ABA, the DC_VIDEO write that turns VGA on).  The counts
+ * are pinned so that a different port build fails instead of half-moving.
+ */
+static int
+slot_patch (unsigned char *img, long len, int slot, int expect,
+            const char *what, char *err, size_t errsz)
+{
+  static const unsigned char abs_ops[] = {
+    0x0D, 0x0E, 0x19, 0x1D, 0x1E, 0x20, 0x2C, 0x2D, 0x2E, 0x39, 0x3D, 0x3E,
+    0x4C, 0x4D, 0x4E, 0x59, 0x5D, 0x5E, 0x6D, 0x6E, 0x79, 0x7D, 0x7E, 0x8C,
+    0x8D, 0x8E, 0x99, 0x9D, 0xAC, 0xAD, 0xAE, 0xB9, 0xBC, 0xBD, 0xBE, 0xCC,
+    0xCD, 0xCE, 0xD9, 0xDD, 0xDE, 0xEC, 0xED, 0xEE, 0xF9, 0xFD, 0xFE
+  };
+  long i;
+  int n = 0;
+
+  for (i = 0; i + 2 < len; i++)
+    if (img[i + 2] == 0xC4 && img[i + 1] < 0x20
+        && memchr (abs_ops, img[i], sizeof (abs_ops)))
+      n++;
+  if (n != expect)
+    {
+      snprintf (err, errsz, "%s: %d VERA register operands, expected %d",
+                what, n, expect);
+      return -1;
+    }
+  for (i = 0; i + 2 < len; i++)
+    if (img[i + 2] == 0xC4 && img[i + 1] < 0x20
+        && memchr (abs_ops, img[i], sizeof (abs_ops)))
+      img[i + 2] = (unsigned char) (0xC0 + slot);
+  return 0;
+}
+
+int
+nesgfx_slot (struct nesgfx *g, int slot, char *err, size_t errsz)
+{
+  if (slot < 1 || slot > 7)
+    {
+      snprintf (err, errsz, "slot %d: must be 1-7", slot);
+      return -1;
+    }
+  if (slot == 4)
+    return 0;
+  /* the payload's 32 plus palhook's five */
+  if (slot_patch (g->resident, sizeof (g->resident), slot, 56, "resident",
+                  err, errsz)
+      || slot_patch (g->resident_po, sizeof (g->resident_po), slot, 56,
+                     "ProDOS resident", err, errsz)
+      || slot_patch (g->payload, sizeof (g->payload), slot, 37, "payload",
+                     err, errsz)
+      || slot_patch (g->lcaud, sizeof (g->lcaud), slot, 58, "LC audio",
+                     err, errsz))
+    return -1;
+  return 0;
+}
+
 int
 nesgfx_build (const unsigned char *prg, const unsigned char *chr,
               struct nesgfx *g, char *err, size_t errsz)

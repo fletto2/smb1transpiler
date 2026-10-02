@@ -107,6 +107,10 @@ replaces the VERA chunks; its header comment lists every patch site and why.
 - **HUD and text screens**: unchanged; the port already draws them from NES CHR with NES
   attributes, and they now share the four BG palettes with the playfield.
 
+The published port reaches VERA at fixed `$C400` addresses, so it only works in slot 4.
+`--slot N` moves all of them (146 sites, counted and checked) to another slot, e.g.
+`./smb1transpiler --nesgfx --slot 7`. It does not detect the slot at runtime.
+
 No CRC is pinned for these images and no `.d64` is written. This mode has not yet been run
 on hardware.
 

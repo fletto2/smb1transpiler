@@ -934,7 +934,8 @@ err_free_vram:
  * offsets this build does not re-derive.
  */
 static int
-build_disk_nesgfx (const struct rom *nes, long chr_off, const char *outdir)
+build_disk_nesgfx (const struct rom *nes, long chr_off, int slot,
+                   const char *outdir)
 {
   static unsigned char game[32768];
   static struct nesgfx g;
@@ -956,6 +957,12 @@ build_disk_nesgfx (const struct rom *nes, long chr_off, const char *outdir)
       fprintf (stderr, "nesgfx FAILED: %s\n", err);
       return -1;
     }
+  if (nesgfx_slot (&g, slot, err, sizeof (err)))
+    {
+      fprintf (stderr, "nesgfx FAILED: %s\n", err);
+      return -1;
+    }
+  printf ("  VERA in slot %d ($C%d00)\n", slot, slot);
   printf ("  NES MetatileGraphics at $%04X $%04X $%04X $%04X\n",
           g.mt_ptr[0], g.mt_ptr[1], g.mt_ptr[2], g.mt_ptr[3]);
 
@@ -1086,7 +1093,10 @@ usage (const char *argv0)
            "match\n"
            "  --nesgfx  EXPERIMENTAL: original NES graphics instead of\n"
            "            SMAS; needs only the .nes, writes\n"
-           "            nesgfx_smb1_vera.dsk/.po\n", argv0);
+           "            nesgfx_smb1_vera.dsk/.po\n"
+           "  --slot N  with --nesgfx: the VERA card's slot, 1-7 (default\n"
+           "            4, the only slot the published port supports)\n",
+           argv0);
 }
 
 int
@@ -1099,7 +1109,7 @@ main (int argc, char **argv)
   const char *ref = NULL;
   unsigned char *tiles;
   long chr_off = 0;
-  int force = 0, nesgfx = 0;
+  int force = 0, nesgfx = 0, slot = 4;
   int i, ret = 0;
 
   for (i = 1; i < argc; i++)
@@ -1114,6 +1124,8 @@ main (int argc, char **argv)
         force = 1;
       else if (!strcmp (argv[i], "--nesgfx"))
         nesgfx = 1;
+      else if (!strcmp (argv[i], "--slot") && i + 1 < argc)
+        slot = atoi (argv[++i]);
       else
         {
           usage (argv[0]);
@@ -1146,7 +1158,7 @@ main (int argc, char **argv)
               "nesgfx    : EXPERIMENTAL original NES graphics, no SMAS\n\n",
               nes.path, nes.size, chr_off);
       MKDIR (outdir);
-      ret = build_disk_nesgfx (&nes, chr_off, outdir) ? 1 : 0;
+      ret = build_disk_nesgfx (&nes, chr_off, slot, outdir) ? 1 : 0;
       goto err_free_roms;
     }
 
