@@ -86,7 +86,7 @@ from a dump whose fingerprint does not match.
 ## Experimental: original NES graphics (`--nesgfx`)
 
 ```sh
-./smb1transpiler --nesgfx               # writes out/nesgfx_smb1_vera_autoslot.{dsk,po}
+./smb1transpiler --nesgfx               # writes out/nesgfx_smb1_vera_autoslot.{dsk,po,2mg}
 ```
 
 Builds the same port drawn with the 1985 NES artwork and colours instead of SMAS. Only the
