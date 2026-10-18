@@ -83,11 +83,15 @@ Other flags: `--verify tiles_vera.bin` for a per-block tileset report, `--vram v
 overwrite a reference stream instead of building one, `--out DIR`, and `--force` to build
 from a dump whose fingerprint does not match.
 
-## Experimental: original NES graphics (`--nesgfx`)
+## Optional: original NES graphics (`--nesgfx`)
 
 ```sh
 ./smb1transpiler --nesgfx               # writes out/nesgfx_smb1_vera_autoslot.{dsk,po,2mg}
 ```
+
+An extra build for anyone who prefers the look of the 1985 NES original. It sits beside the
+SMAS build rather than replacing it: without the flag the tool writes exactly the disks above,
+and the two sets of images have different names, so both can be built into the same `out/`.
 
 Builds the same port drawn with the 1985 NES artwork and colours instead of SMAS. Only the
 `.nes` dump is needed; a SMAS dump in the folder is ignored. The game image, the disk layout
@@ -109,8 +113,8 @@ replaces the VERA chunks; its header comment lists every patch site and why.
 
 Like the stock disk, it finds the VERA card in any slot at boot.
 
-No CRC is pinned for these images and no `.d64` is written. This mode has not yet been run
-on hardware.
+Tested on a real Apple II with an A2VERA card. No CRC is pinned for these images and no
+`.d64` is written.
 
 ## Input
 
