@@ -17,7 +17,7 @@ them, and the port's own 6502 code. Supply the two dumps and the tool derives th
 
 ```sh
 make                                    # or: cc -O2 -o smb1transpiler *.c
-./smb1transpiler                        # writes out/smb1_vera.{dsk,po,d64}
+./smb1transpiler                        # writes out/smb1_vera.{dsk,po,2mg,d64}
 ```
 
 Portable C99 with no libraries beyond the standard one. Linux, macOS and BSD build with the
@@ -25,7 +25,7 @@ line above. **Windows** builds the same sources with MinGW or MSVC:
 
 ```
 gcc -O2 -o smb1transpiler.exe *.c                                           REM MinGW
-cl /O2 /Fe:smb1transpiler.exe smb1transpiler.c sprites.c disk.c po.c d64.c   REM MSVC
+cl /O2 /Fe:smb1transpiler.exe smb1transpiler.c sprites.c disk.c po.c d64.c nesgfx.c   REM MSVC
 ```
 
 Listing a directory is the one thing C does not standardise, so `dirscan_*()` wraps `dirent`
@@ -82,6 +82,39 @@ one on those disks, all ten of them, and the image boots to the title screen.
 Other flags: `--verify tiles_vera.bin` for a per-block tileset report, `--vram vram.dat` to
 overwrite a reference stream instead of building one, `--out DIR`, and `--force` to build
 from a dump whose fingerprint does not match.
+
+## Optional: original NES graphics (`--nesgfx`)
+
+```sh
+./smb1transpiler --nesgfx               # writes out/nesgfx_smb1_vera_autoslot.{dsk,po,2mg}
+```
+
+An extra build for anyone who prefers the look of the 1985 NES original. It sits beside the
+SMAS build rather than replacing it: without the flag the tool writes exactly the disks above,
+and the two sets of images have different names, so both can be built into the same `out/`.
+
+Builds the same port drawn with the 1985 NES artwork and colours instead of SMAS. Only the
+`.nes` dump is needed; a SMAS dump in the folder is ignored. The game image, the disk layout
+and the track map are the stock ones. `nesgfx.c` patches copies of the port's 6502 and
+replaces the VERA chunks; its header comment lists every patch site and why.
+
+- **Backgrounds**: the port's metatile table is rebuilt from the game's own
+  `MetatileGraphics` tables (located in your PRG at build time), with NES pattern table 1 as
+  the L0 tileset. Palettes follow the metatile id's top two bits, which is how SMB1 sets its
+  attributes, so colour changes at the NES's 16×16 grain.
+- **Sprites**: NES pattern table 0, one VERA 8×8 sprite per OAM entry, palette from the OAM
+  attribute. The SMAS 16×16 composites (Bowser, flag, hammer, coins) are not used.
+- **Palette**: the game's `$3Fxx` writes, which the stock port drops, are turned into VERA
+  palette writes (`nesgfx/palhook.s`), so area palettes, the ?-block cycle, star flashing,
+  fiery Mario and Luigi come from the game. The NES→RGB table is a common 2C02
+  approximation, quantised to VERA's 4 bits per channel.
+- **HUD and text screens**: unchanged; the port already draws them from NES CHR with NES
+  attributes, and they now share the four BG palettes with the playfield.
+
+Like the stock disk, it finds the VERA card in any slot at boot.
+
+Tested on a real Apple II with an A2VERA card. No CRC is pinned for these images and no
+`.d64` is written.
 
 ## Input
 

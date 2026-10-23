@@ -1,7 +1,7 @@
 # smb1transpiler -- derive a2vera's disk from YOUR OWN SMB1 + SMAS ROMs.
 CC     ?= cc
 CFLAGS ?= -O2 -Wall -Wextra
-SRC     = smb1transpiler.c sprites.c disk.c po.c d64.c
+SRC     = smb1transpiler.c sprites.c disk.c po.c d64.c nesgfx.c
 DEPS    = smb1transpiler.h a2vera_blobs.h
 
 smb1transpiler: $(SRC) $(DEPS)
@@ -22,4 +22,8 @@ clean:
 	rm -f smb1transpiler
 	rm -rf out
 
-.PHONY: run verify clean
+# EXPERIMENTAL: original NES graphics, needs only the .nes
+nesgfx: smb1transpiler
+	./smb1transpiler --nesgfx
+
+.PHONY: run nesgfx verify clean

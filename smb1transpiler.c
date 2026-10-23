@@ -266,6 +266,19 @@ check_dumps (const struct rom *nes, const struct rom *smas, long chr_off)
 
   pc = crc32b (nes->data + 16, 32768);
   cc = crc32b (nes->data + chr_off, 8192);
+  if (!smas->data)
+    {
+      /* --nesgfx: only the NES dump is read */
+      if (pc == CRC_SMB1_PRG && cc == CRC_SMB1_CHR)
+        return 0;
+      fprintf (stderr, "\n*** DUMP FINGERPRINT MISMATCH ***\n"
+               "  SMB1 PRG %08lX %s | CHR %08lX %s\n"
+               "The port's relocation tables are measured against the\n"
+               "original PRG.  Use --force if you meant it.\n",
+               pc, pc == CRC_SMB1_PRG ? "ok" : "BAD",
+               cc, cc == CRC_SMB1_CHR ? "ok" : "BAD");
+      return -1;
+    }
   b6 = crc32b (smas->data + smas->base + 0x30000L, 8192);
   b7 = crc32b (smas->data + smas->base + 0x38000L, 16384);
   ba = crc32b (smas->data + smas->base + 0x50000L, 32768);
@@ -295,7 +308,8 @@ check_dumps (const struct rom *nes, const struct rom *smas, long chr_off)
 }
 
 static int
-find_roms (struct rom *nes, struct rom *smas, long *chr_off)
+find_roms (struct rom *nes, struct rom *smas, long *chr_off,
+           int need_smas)
 {
   struct dirscan scan;
   const char *name;
@@ -330,10 +344,10 @@ find_roms (struct rom *nes, struct rom *smas, long *chr_off)
   if (!nes->data)
     fprintf (stderr, "ERROR: no Super Mario Bros .nes here "
              "(need iNES, 32K PRG + 8K CHR)\n");
-  if (!smas->data)
+  if (!smas->data && need_smas)
     fprintf (stderr, "ERROR: no Super Mario All-Stars .sfc/.smc/"
              ".bin here (need 2 MB LoROM)\n");
-  return nes->data && smas->data ? 0 : -1;
+  return nes->data && (smas->data || !need_smas) ? 0 : -1;
 }
 
 /*
@@ -694,6 +708,30 @@ fill_vram (unsigned char *v, const struct rom *smas,
   return sub == nch ? 0 : -1;
 }
 
+/* the 800K image behind a 64-byte 2IMG header, which says "ProDOS order,
+   1600 blocks" in the file itself.  Floppy Emu's 3.5" mode and most
+   emulators take it without relying on the extension. */
+static int
+write_2mg (const char *outdir, const char *name, const struct po *po)
+{
+  static unsigned char img2[64 + PO_BYTES];
+  unsigned char *h = img2;
+
+  memset (h, 0, 64);
+  memcpy (h, "2IMGSMBT", 8);    /* magic, creator */
+  h[8] = 64;                    /* header length */
+  h[10] = 1;                    /* version */
+  h[12] = 1;                    /* image format: ProDOS order */
+  h[20] = (unsigned char) (1600 & 0xFF);        /* blocks */
+  h[21] = (unsigned char) (1600 >> 8);
+  h[24] = 64;                   /* data offset */
+  h[28] = (unsigned char) (PO_BYTES & 0xFF);    /* data length */
+  h[29] = (unsigned char) ((PO_BYTES >> 8) & 0xFF);
+  h[30] = (unsigned char) ((PO_BYTES >> 16) & 0xFF);
+  memcpy (img2 + 64, po->img, PO_BYTES);
+  return write_file (outdir, name, img2, (long) sizeof (img2));
+}
+
 static int
 build_disk (const struct rom *nes, const struct rom *smas,
             long chr_off, const unsigned char *tiles,
@@ -793,6 +831,8 @@ build_disk (const struct rom *nes, const struct rom *smas,
         goto err_free_vram;
       }
     if (write_file (outdir, "smb1_vera.po", po.img, PO_BYTES))
+      ret = 1;
+    if (write_2mg (outdir, "smb1_vera.2mg", &po))
       ret = 1;
     printf ("  boot block 0 | resident blocks 512-%d | tracks 2-34 mapped "
             "from block 16\n",
@@ -910,6 +950,120 @@ err_free_vram:
   return ret;
 }
 
+/*
+ * EXPERIMENTAL: the same disk with the 1985 NES graphics (nesgfx.c).  The
+ * game image and the disk layout are the stock ones; what differs is the
+ * VERA chunks and four patched copies of the port's 6502.  No SMAS data is
+ * read, and there is no reference CRC to meet -- this disk has never been
+ * shipped, so the CRCs printed are for telling two builds apart only.  The
+ * C64 image is not built: its LC audio carries zero-page relocations at
+ * offsets this build does not re-derive.
+ */
+static int
+build_disk_nesgfx (const struct rom *nes, long chr_off, const char *outdir)
+{
+  static unsigned char game[32768];
+  static struct nesgfx g;
+  static struct disk dsk, pdsk;
+  static struct po po;
+  unsigned char *vram, *dat;
+  long vram_len, off, a, ln;
+  char err[512];
+  int i, nch, sub = 0;
+
+  if (build_game (nes, game))
+    {
+      fprintf (stderr, "game image: the PRG is not the expected dump\n");
+      return -1;
+    }
+  if (nesgfx_build (nes->data + 16, nes->data + chr_off, &g, err,
+                    sizeof (err)))
+    {
+      fprintf (stderr, "nesgfx FAILED: %s\n", err);
+      return -1;
+    }
+  printf ("  NES MetatileGraphics at $%04X $%04X $%04X $%04X\n",
+          g.mt_ptr[0], g.mt_ptr[1], g.mt_ptr[2], g.mt_ptr[3]);
+
+  vram = alloc_vram (&vram_len);
+  if (!vram)
+    {
+      fprintf (stderr, "out of memory\n");
+      return -1;
+    }
+  nch = vram[0] | (vram[1] << 8);
+  for (i = 0, off = 2; i < nch; i++)
+    {
+      a = vram[off] | (vram[off + 1] << 8) | ((long) vram[off + 2] << 16);
+      ln = vram[off + 3] | (vram[off + 4] << 8);
+      dat = vram + off + 5;
+      off += 5 + ln;
+      if (a == 0x02000L && ln == (long) sizeof (g.tiles))
+        memcpy (dat, g.tiles, (size_t) ln);
+      else if (a == 0x14000L && ln == 8192)
+        memcpy (dat, g.spr_b0a, 8192);
+      else if (a == 0x16000L && ln == 8192)
+        memcpy (dat, g.spr_b07, 8192);
+      else if (a == 0x1A000L && ln == 8192)
+        memcpy (dat, g.font, 8192);
+      else if (a == 0x1FA00L && ln == 512)
+        memcpy (dat, g.pal, 512);
+      else if (a == 0x00000L && ln == 0x1800)
+        build_maps (dat, dat + 0x1000);
+      else if (a == 0x01000L && ln == 0x0800)
+        {
+          static unsigned char l0[0x1000];
+
+          build_maps (l0, dat);
+        }
+      else
+        continue;
+      sub++;
+    }
+  if (sub != nch)
+    {
+      fprintf (stderr, "nesgfx: filled %d of %d VERA chunks\n", sub, nch);
+      free (vram);
+      return -1;
+    }
+
+  printf ("\nbuilding the NES-graphics disk images:\n");
+  if (disk_build (&dsk, blob_boot1, sizeof (blob_boot1),
+                  g.resident, sizeof (g.resident), game, sizeof (game),
+                  g.payload, sizeof (g.payload), vram, vram_len,
+                  g.lcaud, sizeof (g.lcaud), err, sizeof (err)))
+    {
+      fprintf (stderr, "disk layout FAILED: %s\n", err);
+      free (vram);
+      return -1;
+    }
+  free (vram);
+  if (write_file (outdir, "nesgfx_smb1_vera_autoslot.dsk", dsk.img, DSK_BYTES))
+    return -1;
+  printf ("  CRC32 %08lX\n", crc32b (dsk.img, DSK_BYTES));
+
+  pdsk = dsk;
+  for (i = 0; i < PO_PATCH_COUNT; i++)
+    {
+      long o = po_payload_off[i * 2] | (po_payload_off[i * 2 + 1] << 8);
+
+      pdsk.img[disk_payload_off (o)] = po_payload_val[i];
+    }
+  if (po_build (&po, &pdsk, blob_boot_po, sizeof (blob_boot_po),
+                g.resident_po, sizeof (g.resident_po), err, sizeof (err)))
+    {
+      fprintf (stderr, "ProDOS layout FAILED: %s\n", err);
+      return -1;
+    }
+  if (write_file (outdir, "nesgfx_smb1_vera_autoslot.po", po.img, PO_BYTES))
+    return -1;
+  printf ("  CRC32 %08lX\n", crc32b (po.img, PO_BYTES));
+
+  if (write_2mg (outdir, "nesgfx_smb1_vera_autoslot.2mg", &po))
+    return -1;
+  return 0;
+}
+
 /* optional: compare the derived tileset against a reference and report */
 static int
 verify (const unsigned char *tiles, const char *ref_path)
@@ -952,13 +1106,16 @@ usage (const char *argv0)
 {
   fprintf (stderr,
            "usage: %s [--out DIR] [--verify tiles_vera.bin]\n"
-           "           [--vram vram.dat] [--force]\n"
+           "           [--vram vram.dat] [--force] [--nesgfx]\n"
            "  scans the CURRENT folder for *.nes and *.sfc/*.smc/*.bin\n"
            "  --verify  report per-block tileset fidelity vs a reference\n"
            "  --vram    overwrite a reference VERA stream instead of\n"
            "            building one (a stricter check on the chunks)\n"
            "  --force   build from a dump whose fingerprint does not "
-           "match\n", argv0);
+           "match\n"
+           "  --nesgfx  EXPERIMENTAL: original NES graphics instead of\n"
+           "            SMAS; needs only the .nes, writes\n"
+           "            nesgfx_smb1_vera_autoslot.dsk/.po/.2mg\n", argv0);
 }
 
 int
@@ -971,7 +1128,7 @@ main (int argc, char **argv)
   const char *ref = NULL;
   unsigned char *tiles;
   long chr_off = 0;
-  int force = 0;
+  int force = 0, nesgfx = 0;
   int i, ret = 0;
 
   for (i = 1; i < argc; i++)
@@ -984,6 +1141,8 @@ main (int argc, char **argv)
         outdir = argv[++i];
       else if (!strcmp (argv[i], "--force"))
         force = 1;
+      else if (!strcmp (argv[i], "--nesgfx"))
+        nesgfx = 1;
       else
         {
           usage (argv[0]);
@@ -991,7 +1150,7 @@ main (int argc, char **argv)
         }
     }
 
-  if (find_roms (&nes, &smas, &chr_off))
+  if (find_roms (&nes, &smas, &chr_off, !nesgfx))
     {
       fprintf (stderr, "\nThis repository ships no Nintendo data by "
                "design -- supply your own dumps in this\n"
@@ -999,9 +1158,24 @@ main (int argc, char **argv)
       ret = 1;
       goto err_free_roms;
     }
+  if (nesgfx)
+    {
+      /* the SMAS dump is not read at all, even if one is present */
+      free (smas.data);
+      smas.data = NULL;
+    }
   if (check_dumps (&nes, &smas, chr_off) && !force)
     {
       ret = 1;
+      goto err_free_roms;
+    }
+  if (nesgfx)
+    {
+      printf ("NES  SMB1 : %s  (%ld bytes, CHR at 0x%04lX)\n"
+              "nesgfx    : EXPERIMENTAL original NES graphics, no SMAS\n\n",
+              nes.path, nes.size, chr_off);
+      MKDIR (outdir);
+      ret = build_disk_nesgfx (&nes, chr_off, outdir) ? 1 : 0;
       goto err_free_roms;
     }
 
